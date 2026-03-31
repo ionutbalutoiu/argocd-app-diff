@@ -12,7 +12,8 @@ import (
 )
 
 type fakeRepositoryServiceClient struct {
-	getRepoFunc func(context.Context, string, string) (*argoappv1.Repository, error)
+	getRepoFunc          func(context.Context, string, string) (*argoappv1.Repository, error)
+	listRepositoriesFunc func(context.Context) (*argoappv1.RepositoryList, error)
 }
 
 func (f fakeRepositoryServiceClient) List(context.Context, *repositorypkg.RepoQuery, ...grpc.CallOption) (*argoappv1.RepositoryList, error) {
@@ -30,7 +31,10 @@ func (f fakeRepositoryServiceClient) GetWrite(context.Context, *repositorypkg.Re
 	panic("unexpected call to GetWrite")
 }
 
-func (f fakeRepositoryServiceClient) ListRepositories(context.Context, *repositorypkg.RepoQuery, ...grpc.CallOption) (*argoappv1.RepositoryList, error) {
+func (f fakeRepositoryServiceClient) ListRepositories(ctx context.Context, _ *repositorypkg.RepoQuery, _ ...grpc.CallOption) (*argoappv1.RepositoryList, error) {
+	if f.listRepositoriesFunc != nil {
+		return f.listRepositoriesFunc(ctx)
+	}
 	return &argoappv1.RepositoryList{}, nil
 }
 

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 
+	"argocd-app-diff/internal/repocreds"
+
 	repositorypkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/repository"
 	settingspkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/settings"
 	argoappv1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
@@ -16,13 +18,14 @@ import (
 )
 
 type targetParams struct {
-	App         *argoappv1.Application
-	Project     *argoappv1.AppProject
-	Cluster     *argoappv1.Cluster
-	Settings    *settingspkg.Settings
-	RepoClient  repositorypkg.RepositoryServiceClient
-	RepoServer  repoapiclient.RepoServerServiceClient
-	HardRefresh bool
+	App             *argoappv1.Application
+	Project         *argoappv1.AppProject
+	Cluster         *argoappv1.Cluster
+	Settings        *settingspkg.Settings
+	RepoClient      repositorypkg.RepositoryServiceClient
+	RepoServer      repoapiclient.RepoServerServiceClient
+	RepoCredentials *repocreds.Set
+	HardRefresh     bool
 }
 
 func resolveDesiredObjects(ctx context.Context, params targetParams) ([]*unstructured.Unstructured, error) {
@@ -32,9 +35,10 @@ func resolveDesiredObjects(ctx context.Context, params targetParams) ([]*unstruc
 	settings := params.Settings
 	repoIf := params.RepoClient
 	repoClient := params.RepoServer
+	repoCredentials := params.RepoCredentials
 	hardRefresh := params.HardRefresh
 
-	repos, err := loadPermittedRepos(ctx, repoIf, proj)
+	repos, err := loadPermittedRepos(ctx, repoIf, proj, repoCredentials)
 	if err != nil {
 		return nil, err
 	}
@@ -44,14 +48,14 @@ func resolveDesiredObjects(ctx context.Context, params targetParams) ([]*unstruc
 	for i := range sources {
 		revisions[i] = sources[i].TargetRevision
 	}
-	refSources, err := argo.GetRefSources(ctx, sources, app.Spec.Project, sourceRepositoryGetter(repoIf), revisions)
+	refSources, err := argo.GetRefSources(ctx, sources, app.Spec.Project, sourceRepositoryGetter(repoIf, repoCredentials), revisions)
 	if err != nil {
 		return nil, fmt.Errorf("resolve ref sources: %w", err)
 	}
 
 	var targetObjects []*unstructured.Unstructured
 	for _, source := range sources {
-		repo, err := getRepository(ctx, repoIf, source.RepoURL, proj.Name)
+		repo, err := getRepository(ctx, repoIf, source.RepoURL, proj.Name, repoCredentials)
 		if err != nil {
 			return nil, fmt.Errorf("get repository %q: %w", source.RepoURL, err)
 		}
@@ -69,6 +73,7 @@ func resolveDesiredObjects(ctx context.Context, params targetParams) ([]*unstruc
 			KustomizeOptions:                settings.KustomizeOptions,
 			KubeVersion:                     cluster.Info.ServerVersion,
 			ApiVersions:                     cluster.Info.APIVersions,
+			HelmRepoCreds:                   repos.helmCreds,
 			TrackingMethod:                  settings.TrackingMethod,
 			ProjectName:                     proj.Name,
 			ProjectSourceRepos:              proj.Spec.SourceRepos,
@@ -113,9 +118,12 @@ func decodeManifestObjects(manifests []string) ([]*unstructured.Unstructured, er
 	return objects, nil
 }
 
-func sourceRepositoryGetter(repoIf repositorypkg.RepositoryServiceClient) func(context.Context, string, string) (*argoappv1.Repository, error) {
+func sourceRepositoryGetter(
+	repoIf repositorypkg.RepositoryServiceClient,
+	repoCredentials *repocreds.Set,
+) func(context.Context, string, string) (*argoappv1.Repository, error) {
 	return func(ctx context.Context, repoURL string, project string) (*argoappv1.Repository, error) {
-		return getRepository(ctx, repoIf, repoURL, project)
+		return getRepository(ctx, repoIf, repoURL, project, repoCredentials)
 	}
 }
 
@@ -124,32 +132,47 @@ func getRepository(
 	repoIf repositorypkg.RepositoryServiceClient,
 	repoURL string,
 	project string,
+	repoCredentials *repocreds.Set,
 ) (*argoappv1.Repository, error) {
 	repo, err := repoIf.Get(ctx, &repositorypkg.RepoQuery{
 		Repo:       repoURL,
 		AppProject: project,
 	})
-	return repositoryOrFallback(repo, err, repoURL)
+	return resolveRepository(repo, err, repoURL, repoCredentials)
 }
 
-func repositoryOrFallback(repo *argoappv1.Repository, err error, repoURL string) (*argoappv1.Repository, error) {
+func resolveRepository(
+	repo *argoappv1.Repository,
+	err error,
+	repoURL string,
+	repoCredentials *repocreds.Set,
+) (*argoappv1.Repository, error) {
 	if err != nil {
 		switch status.Code(err) {
 		case codes.NotFound, codes.PermissionDenied:
-			return &argoappv1.Repository{Repo: repoURL}, nil
+			return fallbackRepository(repoURL, repoCredentials)
 		default:
 			return nil, err
 		}
 	}
 	if repo == nil {
-		return &argoappv1.Repository{Repo: repoURL}, nil
+		return fallbackRepository(repoURL, repoCredentials)
+	}
+
+	hydrated, applied, err := repoCredentials.HydrateRepository(repo)
+	if err != nil {
+		return nil, err
+	}
+	if applied {
+		return hydrated, nil
 	}
 	return repo, nil
 }
 
 type permittedRepos struct {
-	helm []*argoappv1.Repository
-	oci  []*argoappv1.Repository
+	helm      []*argoappv1.Repository
+	oci       []*argoappv1.Repository
+	helmCreds []*argoappv1.RepoCreds
 }
 
 func (r permittedRepos) forSource(source argoappv1.ApplicationSource) []*argoappv1.Repository {
@@ -165,10 +188,19 @@ func loadPermittedRepos(
 	ctx context.Context,
 	repoIf repositorypkg.RepositoryServiceClient,
 	proj *argoappv1.AppProject,
+	repoCredentials *repocreds.Set,
 ) (permittedRepos, error) {
 	configuredRepos, err := repoIf.ListRepositories(ctx, &repositorypkg.RepoQuery{})
 	if err != nil {
 		return permittedRepos{}, fmt.Errorf("list configured repositories: %w", err)
+	}
+
+	for i := range configuredRepos.Items {
+		hydrated, _, err := repoCredentials.HydrateRepository(configuredRepos.Items[i])
+		if err != nil {
+			return permittedRepos{}, fmt.Errorf("hydrate configured repository %q: %w", configuredRepos.Items[i].Repo, err)
+		}
+		configuredRepos.Items[i] = hydrated
 	}
 
 	var helmRepos []*argoappv1.Repository
@@ -190,9 +222,26 @@ func loadPermittedRepos(
 	if err != nil {
 		return permittedRepos{}, fmt.Errorf("filter permitted OCI repositories: %w", err)
 	}
+	permittedHelmRepoCreds, err := argo.GetPermittedReposCredentials(proj, repoCredentials.HelmRepoCreds())
+	if err != nil {
+		return permittedRepos{}, fmt.Errorf("filter permitted repository credentials: %w", err)
+	}
 
 	return permittedRepos{
-		helm: permittedHelmRepos,
-		oci:  permittedOCIRepos,
+		helm:      permittedHelmRepos,
+		oci:       permittedOCIRepos,
+		helmCreds: permittedHelmRepoCreds,
 	}, nil
+}
+
+func fallbackRepository(repoURL string, repoCredentials *repocreds.Set) (*argoappv1.Repository, error) {
+	repo, matched, err := repoCredentials.MatchRepository(repoURL)
+	if err != nil {
+		return nil, err
+	}
+	if matched {
+		repo.InheritedCreds = true
+		return repo, nil
+	}
+	return &argoappv1.Repository{Repo: repoURL}, nil
 }

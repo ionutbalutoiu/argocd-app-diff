@@ -36,13 +36,15 @@ You need:
 
 ## Usage
 
-Build:
+### Build
 
 ```sh
 make build
 ```
 
-Run:
+### Basic Diff
+
+Run a diff against a local `Application` manifest:
 
 ```sh
 ./bin/argocd-app-diff \
@@ -50,7 +52,9 @@ Run:
   --application-file path/to/application.yaml
 ```
 
-Override one or more source revisions:
+### Source Revision Overrides
+
+Override one or more source revisions before diffing:
 
 ```sh
 ./bin/argocd-app-diff \
@@ -66,6 +70,68 @@ Useful flags:
 - `--refresh`
 - `--hard-refresh`
 - `--diff-exit-code`
+
+### Repository Credentials
+
+Repository credentials can be supplied through `ARGOCD_APP_DIFF_REPO_CREDENTIALS_JSON`
+or `ARGOCD_APP_DIFF_REPO_CREDENTIALS_JSON_PATH`. The inline JSON env var takes precedence
+when both are set.
+
+The value is a JSON array of exact or prefix matches. `match` is optional and defaults
+to `exact`.
+
+Supported auth modes:
+
+- `username` + `password`
+- `sshPrivateKey`
+
+Inline JSON example:
+
+```sh
+export ARGOCD_APP_DIFF_REPO_CREDENTIALS_JSON='[
+  {
+    "repo": "https://github.com/example/private-app.git",
+    "username": "git-user",
+    "password": "git-token"
+  },
+  {
+    "match": "prefix",
+    "repo": "oci://registry.example.com/team",
+    "username": "registry-user",
+    "password": "registry-password"
+  },
+  {
+    "repo": "git@github.com:example/private-infra.git",
+    "sshPrivateKey": "-----BEGIN OPENSSH PRIVATE KEY-----\n..."
+  }
+]'
+
+./bin/argocd-app-diff \
+  --repo-server-url grpcs://argocd-repo-server.argocd.svc:8081 \
+  --application-file path/to/application.yaml
+```
+
+JSON file example:
+
+```sh
+cat > repo-creds.json <<'EOF'
+[
+  {
+    "repo": "https://github.com/example/private-app.git",
+    "username": "git-user",
+    "password": "git-token"
+  }
+]
+EOF
+
+export ARGOCD_APP_DIFF_REPO_CREDENTIALS_JSON_PATH=repo-creds.json
+
+./bin/argocd-app-diff \
+  --repo-server-url grpcs://argocd-repo-server.argocd.svc:8081 \
+  --application-file path/to/application.yaml
+```
+
+### Exit Codes
 
 Exit codes:
 

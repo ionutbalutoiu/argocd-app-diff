@@ -5,6 +5,7 @@ import (
 
 	"argocd-app-diff/internal/appdiff"
 	"argocd-app-diff/internal/appspec"
+	"argocd-app-diff/internal/repocreds"
 
 	"github.com/spf13/cobra"
 
@@ -36,7 +37,8 @@ func configureDiffCommand(cmd *cobra.Command, clientOpts *argocdclient.ClientOpt
 
 	cmd.Short = "Display the diff between a local Argo CD Application file and live managed resources"
 	cmd.Long = "Display the diff between a local Argo CD Application file and live managed resources.\n" +
-		"Uses diff output compatible with Argo CD and respects KUBECTL_EXTERNAL_DIFF when set."
+		"Uses diff output compatible with Argo CD and respects KUBECTL_EXTERNAL_DIFF when set.\n" +
+		"Repository credentials may be supplied via " + repocreds.EnvVarJSONName + " or " + repocreds.EnvVarJSONPathName + "."
 	cmd.Args = cobra.NoArgs
 	cmd.RunE = diff.run
 
@@ -74,6 +76,11 @@ func (d *diffCommand) run(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	repoCredentials, err := repocreds.LoadFromEnv()
+	if err != nil {
+		return err
+	}
+
 	liveNamespace := d.namespace
 	if liveNamespace == "" {
 		liveNamespace = app.Namespace
@@ -85,11 +92,12 @@ func (d *diffCommand) run(cmd *cobra.Command, _ []string) error {
 	}
 
 	result, err := appdiff.Run(cmd.Context(), apiClient, appdiff.Request{
-		Application:   app,
-		LiveNamespace: liveNamespace,
-		RepoServerURL: d.repoServerURL,
-		Refresh:       d.refresh,
-		HardRefresh:   d.hardRefresh,
+		Application:     app,
+		LiveNamespace:   liveNamespace,
+		RepoServerURL:   d.repoServerURL,
+		RepoCredentials: repoCredentials,
+		Refresh:         d.refresh,
+		HardRefresh:     d.hardRefresh,
 	})
 	if err != nil {
 		return err

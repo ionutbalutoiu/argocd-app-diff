@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"argocd-app-diff/internal/repocreds"
 	"argocd-app-diff/internal/reposerver"
 
 	argocdclient "github.com/argoproj/argo-cd/v3/pkg/apiclient"
@@ -18,11 +19,12 @@ import (
 
 // Request describes one diff run.
 type Request struct {
-	Application   *argoappv1.Application
-	LiveNamespace string
-	RepoServerURL string
-	Refresh       bool
-	HardRefresh   bool
+	Application     *argoappv1.Application
+	LiveNamespace   string
+	RepoServerURL   string
+	RepoCredentials *repocreds.Set
+	Refresh         bool
+	HardRefresh     bool
 }
 
 // Result reports whether the diff produced changes.
@@ -85,13 +87,14 @@ func run(ctx context.Context, apiClient argocdclient.Client, req Request, printe
 		return Result{}, err
 	}
 	targets, err := resolveDesiredObjects(ctx, targetParams{
-		App:         req.Application,
-		Project:     projectResp,
-		Cluster:     clusterResp,
-		Settings:    settingsResp,
-		RepoClient:  clients.repository,
-		RepoServer:  repoClient,
-		HardRefresh: req.HardRefresh,
+		App:             req.Application,
+		Project:         projectResp,
+		Cluster:         clusterResp,
+		Settings:        settingsResp,
+		RepoClient:      clients.repository,
+		RepoServer:      repoClient,
+		RepoCredentials: req.RepoCredentials,
+		HardRefresh:     req.HardRefresh,
 	})
 	if err != nil {
 		return Result{}, err
