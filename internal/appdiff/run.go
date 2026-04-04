@@ -85,23 +85,23 @@ func run(ctx context.Context, apiClient argocdclient.Client, req Request, printe
 		return Result{}, err
 	}
 	targets, err := resolveDesiredObjects(ctx, targetParams{
-		App:         req.Application,
-		Project:     projectResp,
-		Cluster:     clusterResp,
-		Settings:    settingsResp,
-		RepoClient:  clients.repository,
-		RepoServer:  repoClient,
-		HardRefresh: req.HardRefresh,
+		app:         req.Application,
+		project:     projectResp,
+		cluster:     clusterResp,
+		settings:    settingsResp,
+		repoClient:  clients.repository,
+		repoServer:  repoClient,
+		hardRefresh: req.HardRefresh,
 	})
 	if err != nil {
 		return Result{}, err
 	}
 
-	return compare(CompareRequest{
-		Application:    req.Application,
-		Settings:       settingsResp,
-		LiveResources:  liveResources,
-		DesiredObjects: targets,
+	return compare(compareRequest{
+		application:    req.Application,
+		settings:       settingsResp,
+		liveResources:  liveResources,
+		desiredObjects: targets,
 	}, printer)
 }
 

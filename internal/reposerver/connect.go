@@ -14,6 +14,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	connectTimeoutSeconds = 60
+	probeTimeout          = 5 * time.Second
+)
+
 // Connect opens a repo-server client connection, retrying with the opposite TLS mode
 // when the initial transport handshake indicates a protocol mismatch.
 func Connect(ctx context.Context, address string, tlsConfig repoapiclient.TLSConfiguration) (io.Closer, repoapiclient.RepoServerServiceClient, error) {
@@ -78,7 +83,7 @@ func fallbackConnectionError(initialErr error, fallbackErr error) error {
 }
 
 func newClient(address string, tlsConfig repoapiclient.TLSConfiguration) (io.Closer, repoapiclient.RepoServerServiceClient, error) {
-	repoClientset := repoapiclient.NewRepoServerClientset(address, 60, tlsConfig)
+	repoClientset := repoapiclient.NewRepoServerClientset(address, connectTimeoutSeconds, tlsConfig)
 	return repoClientset.NewRepoServerClient()
 }
 
@@ -88,7 +93,7 @@ func probe(ctx context.Context, conn io.Closer) error {
 		return fmt.Errorf("repo server connection does not support gRPC health checks")
 	}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 
 	healthClient := grpc_health_v1.NewHealthClient(connInterface)

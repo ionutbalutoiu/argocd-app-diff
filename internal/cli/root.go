@@ -23,6 +23,13 @@ func (e *exitError) Error() string {
 	return e.err.Error()
 }
 
+func (e *exitError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
 // Execute runs the CLI and returns the desired process exit code.
 func Execute() int {
 	if err := newRootCommand().Execute(); err != nil {

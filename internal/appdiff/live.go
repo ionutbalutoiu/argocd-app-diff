@@ -17,7 +17,7 @@ func resolveLiveResources(
 	ctx context.Context,
 	appIf applicationpkg.ApplicationServiceClient,
 	req Request,
-) ([]LiveResource, error) {
+) ([]liveResource, error) {
 	resources, err := getManagedResources(ctx, appIf, req)
 	if err != nil {
 		return nil, err
@@ -31,21 +31,21 @@ func resolveLiveResources(
 	return liveResources, nil
 }
 
-func decodeLiveResources(resources []*argoappv1.ResourceDiff) ([]LiveResource, error) {
-	decoded := make([]LiveResource, 0, len(resources))
+func decodeLiveResources(resources []*argoappv1.ResourceDiff) ([]liveResource, error) {
+	decoded := make([]liveResource, 0, len(resources))
 	for _, res := range resources {
 		live, err := decodeResourceState(res.NormalizedLiveState)
 		if err != nil {
 			return nil, err
 		}
-		decoded = append(decoded, LiveResource{
-			Key: kube.ResourceKey{
+		decoded = append(decoded, liveResource{
+			key: kube.ResourceKey{
 				Name:      res.Name,
 				Namespace: res.Namespace,
 				Group:     res.Group,
 				Kind:      res.Kind,
 			},
-			Live: live,
+			live: live,
 		})
 	}
 	return decoded, nil

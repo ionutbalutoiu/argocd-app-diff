@@ -24,23 +24,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// CompareRequest describes a diff run over already-resolved live and desired state.
-type CompareRequest struct {
-	Application    *argoappv1.Application
-	Settings       *settingspkg.Settings
-	LiveResources  []LiveResource
-	DesiredObjects []*unstructured.Unstructured
+// compareRequest describes a diff run over already-resolved live and desired state.
+type compareRequest struct {
+	application    *argoappv1.Application
+	settings       *settingspkg.Settings
+	liveResources  []liveResource
+	desiredObjects []*unstructured.Unstructured
 }
 
-// LiveResource identifies one managed live resource and its normalized live state.
-type LiveResource struct {
-	Key  kube.ResourceKey
-	Live *unstructured.Unstructured
-}
-
-// Compare diffs resolved live and desired state using Argo CD's diff semantics.
-func Compare(req CompareRequest) (Result, error) {
-	return compare(req, stdoutPrinter{})
+// liveResource identifies one managed live resource and its normalized live state.
+type liveResource struct {
+	key  kube.ResourceKey
+	live *unstructured.Unstructured
 }
 
 type diffPrinter interface {
@@ -61,27 +56,27 @@ type diffItem struct {
 }
 
 // compare validates the request, prepares diff inputs, and prints each diff item.
-func compare(req CompareRequest, printer diffPrinter) (Result, error) {
-	if req.Application == nil {
+func compare(req compareRequest, printer diffPrinter) (Result, error) {
+	if req.application == nil {
 		return Result{}, fmt.Errorf("application is required")
 	}
-	if req.Settings == nil {
+	if req.settings == nil {
 		return Result{}, fmt.Errorf("settings are required")
 	}
 
-	groupedTargets := groupObjsByKey(cloneObjects(req.DesiredObjects), req.LiveResources, req.Application.Spec.Destination.Namespace)
+	groupedTargets := groupObjsByKey(cloneObjects(req.desiredObjects), req.liveResources, req.application.Spec.Destination.Namespace)
 	items, err := groupObjsForDiff(
-		req.LiveResources,
+		req.liveResources,
 		groupedTargets,
-		req.Settings,
-		req.Application.InstanceName(req.Settings.ControllerNamespace),
-		req.Application.Spec.Destination.Namespace,
+		req.settings,
+		req.application.InstanceName(req.settings.ControllerNamespace),
+		req.application.Spec.Destination.Namespace,
 	)
 	if err != nil {
 		return Result{}, fmt.Errorf("prepare diff items: %w", err)
 	}
 
-	diffConfig, err := buildDiffConfig(req.Application, req.Settings)
+	diffConfig, err := buildDiffConfig(req.application, req.settings)
 	if err != nil {
 		return Result{}, err
 	}
@@ -107,13 +102,13 @@ func cloneObjects(objs []*unstructured.Unstructured) []*unstructured.Unstructure
 }
 
 // groupObjsByKey normalizes desired objects and indexes diffable targets by resource key.
-func groupObjsByKey(localObjs []*unstructured.Unstructured, liveObjs []LiveResource, appNamespace string) map[kube.ResourceKey]*unstructured.Unstructured {
+func groupObjsByKey(localObjs []*unstructured.Unstructured, liveObjs []liveResource, appNamespace string) map[kube.ResourceKey]*unstructured.Unstructured {
 	namespacedByGk := make(map[schema.GroupKind]bool)
 	for _, liveRes := range liveObjs {
-		if liveRes.Live == nil {
+		if liveRes.live == nil {
 			continue
 		}
-		key := kube.GetResourceKey(liveRes.Live)
+		key := kube.GetResourceKey(liveRes.live)
 		namespacedByGk[schema.GroupKind{Group: key.Group, Kind: key.Kind}] = key.Namespace != ""
 	}
 
@@ -180,14 +175,14 @@ func normalizeTargetNamespace(obj *unstructured.Unstructured, appNamespace strin
 }
 
 // groupObjsForDiff pairs live and desired objects into the diff items to evaluate.
-func groupObjsForDiff(resources []LiveResource, objs map[kube.ResourceKey]*unstructured.Unstructured, argoSettings *settingspkg.Settings, appName, namespace string) ([]diffItem, error) {
+func groupObjsForDiff(resources []liveResource, objs map[kube.ResourceKey]*unstructured.Unstructured, argoSettings *settingspkg.Settings, appName, namespace string) ([]diffItem, error) {
 	resourceTracking := argo.NewResourceTracking()
 	items := make([]diffItem, 0, len(resources)+len(objs))
 
 	for _, liveRes := range resources {
-		key := liveRes.Key
+		key := liveRes.key
 		local, ok := objs[key]
-		if !ok && liveRes.Live == nil {
+		if !ok && liveRes.live == nil {
 			continue
 		}
 		if local != nil && !kube.IsCRD(local) {
@@ -196,7 +191,7 @@ func groupObjsForDiff(resources []LiveResource, objs map[kube.ResourceKey]*unstr
 			}
 		}
 
-		items = append(items, diffItem{key: key, live: liveRes.Live, target: local})
+		items = append(items, diffItem{key: key, live: liveRes.live, target: local})
 		delete(objs, key)
 	}
 

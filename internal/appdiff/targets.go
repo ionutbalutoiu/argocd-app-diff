@@ -16,23 +16,23 @@ import (
 )
 
 type targetParams struct {
-	App         *argoappv1.Application
-	Project     *argoappv1.AppProject
-	Cluster     *argoappv1.Cluster
-	Settings    *settingspkg.Settings
-	RepoClient  repositorypkg.RepositoryServiceClient
-	RepoServer  repoapiclient.RepoServerServiceClient
-	HardRefresh bool
+	app         *argoappv1.Application
+	project     *argoappv1.AppProject
+	cluster     *argoappv1.Cluster
+	settings    *settingspkg.Settings
+	repoClient  repositorypkg.RepositoryServiceClient
+	repoServer  repoapiclient.RepoServerServiceClient
+	hardRefresh bool
 }
 
 func resolveDesiredObjects(ctx context.Context, params targetParams) ([]*unstructured.Unstructured, error) {
-	app := params.App
-	proj := params.Project
-	cluster := params.Cluster
-	settings := params.Settings
-	repoIf := params.RepoClient
-	repoClient := params.RepoServer
-	hardRefresh := params.HardRefresh
+	app := params.app
+	proj := params.project
+	cluster := params.cluster
+	settings := params.settings
+	repoIf := params.repoClient
+	repoClient := params.repoServer
+	hardRefresh := params.hardRefresh
 
 	repos, err := loadPermittedRepos(ctx, repoIf, proj)
 	if err != nil {

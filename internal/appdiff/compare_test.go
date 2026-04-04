@@ -139,16 +139,16 @@ func TestCompareReturnsPrinterError(t *testing.T) {
 	expectedErr := errors.New("boom")
 
 	_, err = compare(
-		CompareRequest{
-			Application: app,
-			Settings: &settingspkg.Settings{
+		compareRequest{
+			application: app,
+			settings: &settingspkg.Settings{
 				AppLabelKey:       "argocd.argoproj.io/instance",
 				ResourceOverrides: map[string]*argoappv1.ResourceOverride{},
 			},
-			LiveResources: []LiveResource{
+			liveResources: []liveResource{
 				{
-					Key: kube.ResourceKey{Name: "example", Namespace: "default", Group: "", Kind: "ConfigMap"},
-					Live: func() *unstructured.Unstructured {
+					key: kube.ResourceKey{Name: "example", Namespace: "default", Group: "", Kind: "ConfigMap"},
+					live: func() *unstructured.Unstructured {
 						obj := &unstructured.Unstructured{}
 						if err := json.Unmarshal(liveJSON, obj); err != nil {
 							t.Fatalf("unmarshal live object: %v", err)
@@ -157,7 +157,7 @@ func TestCompareReturnsPrinterError(t *testing.T) {
 					}(),
 				},
 			},
-			DesiredObjects: []*unstructured.Unstructured{target},
+			desiredObjects: []*unstructured.Unstructured{target},
 		},
 		failingPrinter{err: expectedErr},
 	)
@@ -182,13 +182,13 @@ func TestCompareIncludesLocalOnlyTarget(t *testing.T) {
 
 	printer := &recordingPrinter{}
 	result, err := compare(
-		CompareRequest{
-			Application: app,
-			Settings: &settingspkg.Settings{
+		compareRequest{
+			application: app,
+			settings: &settingspkg.Settings{
 				AppLabelKey:       "argocd.argoproj.io/instance",
 				ResourceOverrides: map[string]*argoappv1.ResourceOverride{},
 			},
-			DesiredObjects: []*unstructured.Unstructured{target},
+			desiredObjects: []*unstructured.Unstructured{target},
 		},
 		printer,
 	)
@@ -224,16 +224,16 @@ func TestComparePrintsRedactedSecretDiff(t *testing.T) {
 
 	printer := &recordingPrinter{}
 	result, err := compare(
-		CompareRequest{
-			Application: app,
-			Settings:    newTestSettings(),
-			LiveResources: []LiveResource{
+		compareRequest{
+			application: app,
+			settings:    newTestSettings(),
+			liveResources: []liveResource{
 				{
-					Key:  kube.GetResourceKey(live),
-					Live: live,
+					key:  kube.GetResourceKey(live),
+					live: live,
 				},
 			},
-			DesiredObjects: []*unstructured.Unstructured{target},
+			desiredObjects: []*unstructured.Unstructured{target},
 		},
 		printer,
 	)
@@ -266,16 +266,16 @@ func TestCompareSkipsUnchangedSecretDiff(t *testing.T) {
 
 	printer := &recordingPrinter{}
 	result, err := compare(
-		CompareRequest{
-			Application: app,
-			Settings:    newTestSettings(),
-			LiveResources: []LiveResource{
+		compareRequest{
+			application: app,
+			settings:    newTestSettings(),
+			liveResources: []liveResource{
 				{
-					Key:  kube.GetResourceKey(live),
-					Live: live,
+					key:  kube.GetResourceKey(live),
+					live: live,
 				},
 			},
-			DesiredObjects: []*unstructured.Unstructured{target},
+			desiredObjects: []*unstructured.Unstructured{target},
 		},
 		printer,
 	)
@@ -297,10 +297,10 @@ func TestComparePrintsRedactedLocalOnlySecret(t *testing.T) {
 
 	printer := &recordingPrinter{}
 	result, err := compare(
-		CompareRequest{
-			Application:    newTestApplication(),
-			Settings:       newTestSettings(),
-			DesiredObjects: []*unstructured.Unstructured{target},
+		compareRequest{
+			application:    newTestApplication(),
+			settings:       newTestSettings(),
+			desiredObjects: []*unstructured.Unstructured{target},
 		},
 		printer,
 	)
@@ -328,13 +328,13 @@ func TestComparePrintsRedactedLiveOnlySecret(t *testing.T) {
 
 	printer := &recordingPrinter{}
 	result, err := compare(
-		CompareRequest{
-			Application: newTestApplication(),
-			Settings:    newTestSettings(),
-			LiveResources: []LiveResource{
+		compareRequest{
+			application: newTestApplication(),
+			settings:    newTestSettings(),
+			liveResources: []liveResource{
 				{
-					Key:  kube.GetResourceKey(live),
-					Live: live,
+					key:  kube.GetResourceKey(live),
+					live: live,
 				},
 			},
 		},
@@ -390,13 +390,13 @@ func TestCompareIncludesLocalOnlyNamespacedResourceWithoutLiveMatch(t *testing.T
 
 	printer := &recordingPrinter{}
 	result, err := compare(
-		CompareRequest{
-			Application: app,
-			Settings: &settingspkg.Settings{
+		compareRequest{
+			application: app,
+			settings: &settingspkg.Settings{
 				AppLabelKey:       "argocd.argoproj.io/instance",
 				ResourceOverrides: map[string]*argoappv1.ResourceOverride{},
 			},
-			DesiredObjects: []*unstructured.Unstructured{target},
+			desiredObjects: []*unstructured.Unstructured{target},
 		},
 		printer,
 	)
@@ -436,13 +436,13 @@ func TestCompareKeepsDistinctNamespacesForLocalOnlyTargets(t *testing.T) {
 
 	printer := &recordingPrinter{}
 	result, err := compare(
-		CompareRequest{
-			Application: app,
-			Settings: &settingspkg.Settings{
+		compareRequest{
+			application: app,
+			settings: &settingspkg.Settings{
 				AppLabelKey:       "argocd.argoproj.io/instance",
 				ResourceOverrides: map[string]*argoappv1.ResourceOverride{},
 			},
-			DesiredObjects: []*unstructured.Unstructured{targetA, targetB},
+			desiredObjects: []*unstructured.Unstructured{targetA, targetB},
 		},
 		printer,
 	)
@@ -485,20 +485,20 @@ func TestCompareDoesNotMutateInputObjects(t *testing.T) {
 	original := target.DeepCopy()
 
 	_, err := compare(
-		CompareRequest{
-			Application: app,
-			Settings: &settingspkg.Settings{
+		compareRequest{
+			application: app,
+			settings: &settingspkg.Settings{
 				AppLabelKey:         "argocd.argoproj.io/instance",
 				ControllerNamespace: "argocd",
 				ResourceOverrides:   map[string]*argoappv1.ResourceOverride{},
 			},
-			LiveResources: []LiveResource{
+			liveResources: []liveResource{
 				{
-					Key:  kube.GetResourceKey(live),
-					Live: live,
+					key:  kube.GetResourceKey(live),
+					live: live,
 				},
 			},
-			DesiredObjects: []*unstructured.Unstructured{target},
+			desiredObjects: []*unstructured.Unstructured{target},
 		},
 		&recordingPrinter{},
 	)
@@ -535,13 +535,13 @@ func TestComparePrintsDiffsInStableOrder(t *testing.T) {
 
 	printer := &recordingPrinter{}
 	result, err := compare(
-		CompareRequest{
-			Application: app,
-			Settings: &settingspkg.Settings{
+		compareRequest{
+			application: app,
+			settings: &settingspkg.Settings{
 				AppLabelKey:       "argocd.argoproj.io/instance",
 				ResourceOverrides: map[string]*argoappv1.ResourceOverride{},
 			},
-			DesiredObjects: []*unstructured.Unstructured{targetB, targetA},
+			desiredObjects: []*unstructured.Unstructured{targetB, targetA},
 		},
 		printer,
 	)

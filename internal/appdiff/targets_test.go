@@ -129,15 +129,15 @@ func TestResolveDesiredObjectsDoesNotSkipMultiSourceEntriesBeforeRepoServer(t *t
 	proj.SetName("default")
 
 	targets, err := resolveDesiredObjects(context.Background(), targetParams{
-		App:     app,
-		Project: proj,
-		Cluster: &argoappv1.Cluster{Info: argoappv1.ClusterInfo{ServerVersion: "v1.30.0"}},
-		Settings: &settingspkg.Settings{
+		app:     app,
+		project: proj,
+		cluster: &argoappv1.Cluster{Info: argoappv1.ClusterInfo{ServerVersion: "v1.30.0"}},
+		settings: &settingspkg.Settings{
 			AppLabelKey:         "argocd.argoproj.io/instance",
 			ControllerNamespace: "argocd",
 		},
-		RepoClient: repoIf,
-		RepoServer: repoClient,
+		repoClient: repoIf,
+		repoServer: repoClient,
 	})
 	if err != nil {
 		t.Fatalf("resolveDesiredObjects returned error: %v", err)
@@ -191,15 +191,15 @@ func TestResolveDesiredObjectsIncludesObjectsFromEveryManifestSource(t *testing.
 	proj.SetName("default")
 
 	targets, err := resolveDesiredObjects(context.Background(), targetParams{
-		App:     app,
-		Project: proj,
-		Cluster: &argoappv1.Cluster{Info: argoappv1.ClusterInfo{ServerVersion: "v1.30.0"}},
-		Settings: &settingspkg.Settings{
+		app:     app,
+		project: proj,
+		cluster: &argoappv1.Cluster{Info: argoappv1.ClusterInfo{ServerVersion: "v1.30.0"}},
+		settings: &settingspkg.Settings{
 			AppLabelKey:         "argocd.argoproj.io/instance",
 			ControllerNamespace: "argocd",
 		},
-		RepoClient: repoIf,
-		RepoServer: repoClient,
+		repoClient: repoIf,
+		repoServer: repoClient,
 	})
 	if err != nil {
 		t.Fatalf("resolveDesiredObjects returned error: %v", err)
